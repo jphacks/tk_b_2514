@@ -300,7 +300,10 @@ export default function TsundokuTama() {
               }
             }}
             onAddBook={addBook}
-            onOpenScanner={() => setIsScannerOpen(true)}
+            onOpenScanner={() => {
+              setIsAddDialogOpen(false); // ダイアログを閉じる
+              setIsScannerOpen(true);
+            }}
             scannedBookInfo={scannedBookInfo}
           />
 
@@ -319,7 +322,13 @@ export default function TsundokuTama() {
       {isScannerOpen && (
         <BarcodeScanner
           onScan={handleBarcodeScan}
-          onClose={() => setIsScannerOpen(false)}
+          onClose={() => {
+            setIsScannerOpen(false);
+            // スキャンされた情報がある場合はダイアログを再び開く
+            if (scannedBookInfo) {
+              setIsAddDialogOpen(true);
+            }
+          }}
         />
       )}
     </div>
