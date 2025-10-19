@@ -24,7 +24,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BarcodeScanner } from "@/components/barcode-scanner";
+import { ClientOnly } from "@/components/client-only";
 import { fetchBookInfo, validateISBN, normalizeISBN } from "@/lib/openbd";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  updateDoc,
+  deleteDoc,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 // Book type definition
 type Book = {
@@ -168,13 +178,28 @@ export default function TsundokuTama() {
   }, [books]);
 
   // Add new book
-  const addBook = (
+  const addBook = async (
     title: string,
     genre: string,
     totalPages: number,
-    coverImage: string
+    coverImage: string,
+    reason?: string
   ) => {
-    const newBook: Book = {
+    // Firebase用のデータ構造
+    const firestoreBook = {
+      title,
+      type: genre,
+      pageCount: totalPages,
+      currentPage: 0,
+      progressRate: 0.0,
+      isFinished: false,
+      coverImage,
+      reason: reason || "",
+      updatedAt: new Date(),
+    };
+
+    // ローカル状態用のBookオブジェクトを作成
+    const localBook: Book = {
       id: Date.now().toString(),
       title,
       genre,
@@ -186,7 +211,29 @@ export default function TsundokuTama() {
         characterTemplates.magazine,
       createdAt: Date.now(),
     };
-    setBooks([...books, newBook]);
+
+    // Firebaseが利用可能な場合のみFirestoreに保存
+    if (db !== null) {
+      try {
+        // Firestoreに保存: users/{uid}/books/{bookId}
+        const docRef = await addDoc(
+          collection(db, "users", "auto-uid", "books"),
+          firestoreBook
+        );
+        console.log("Document written with ID: ", docRef.id);
+
+        // FirestoreのIDを使用してローカルBookを更新
+        localBook.id = docRef.id;
+      } catch (error) {
+        console.error("Error adding document: ", error);
+        // エラーが発生した場合はローカルIDのまま
+      }
+    } else {
+      console.log("Firebase not available, using local storage only");
+    }
+
+    // ローカル状態を更新（Firebaseの有無に関わらず）
+    setBooks([...books, localBook]);
   };
 
   // Update book progress
@@ -320,16 +367,18 @@ export default function TsundokuTama() {
 
       {/* Barcode Scanner */}
       {isScannerOpen && (
-        <BarcodeScanner
-          onScan={handleBarcodeScan}
-          onClose={() => {
-            setIsScannerOpen(false);
-            // スキャンされた情報がある場合はダイアログを再び開く
-            if (scannedBookInfo) {
-              setIsAddDialogOpen(true);
-            }
-          }}
-        />
+        <ClientOnly>
+          <BarcodeScanner
+            onScan={handleBarcodeScan}
+            onClose={() => {
+              setIsScannerOpen(false);
+              // スキャンされた情報がある場合はダイアログを再び開く
+              if (scannedBookInfo) {
+                setIsAddDialogOpen(true);
+              }
+            }}
+          />
+        </ClientOnly>
       )}
     </div>
   );
