@@ -104,7 +104,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
       <Card className="w-full max-w-md bg-background">
         <div className="p-4 border-b border-border flex items-center justify-between">
           <h3 className="text-lg font-semibold">バーコードをスキャン</h3>

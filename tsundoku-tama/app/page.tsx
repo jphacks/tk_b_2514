@@ -21,6 +21,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { BarcodeScanner } from "@/components/barcode-scanner";
+import { ClientOnly } from "@/components/client-only";
+import { fetchBookInfo, validateISBN, normalizeISBN } from "@/lib/openbd";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  updateDoc,
+  deleteDoc,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
+
 // Book type definition
 type Book = {
   id: string;
@@ -472,13 +486,28 @@ export default function TsundokuTama() {
   }, [books]);
 
   // Add new book
-  const addBook = (
+  const addBook = async (
     title: string,
     genre: string,
     totalPages: number,
-    coverImage: string
+    coverImage: string,
+    reason?: string
   ) => {
-    const newBook: Book = {
+    // Firebase用のデータ構造
+    const firestoreBook = {
+      title,
+      type: genre,
+      pageCount: totalPages,
+      currentPage: 0,
+      progressRate: 0.0,
+      isFinished: false,
+      coverImage,
+      reason: reason || "",
+      updatedAt: new Date(),
+    };
+
+    // ローカル状態用のBookオブジェクトを作成
+    const localBook: Book = {
       id: Date.now().toString(),
       title,
       genre,
@@ -490,7 +519,29 @@ export default function TsundokuTama() {
         characterTemplates.magazine,
       createdAt: Date.now(),
     };
-    setBooks([...books, newBook]);
+
+    // Firebaseが利用可能な場合のみFirestoreに保存
+    if (db !== null) {
+      try {
+        // Firestoreに保存: users/{uid}/books/{bookId}
+        const docRef = await addDoc(
+          collection(db, "users", "auto-uid", "books"),
+          firestoreBook
+        );
+        console.log("Document written with ID: ", docRef.id);
+
+        // FirestoreのIDを使用してローカルBookを更新
+        localBook.id = docRef.id;
+      } catch (error) {
+        console.error("Error adding document: ", error);
+        // エラーが発生した場合はローカルIDのまま
+      }
+    } else {
+      console.log("Firebase not available, using local storage only");
+    }
+
+    // ローカル状態を更新（Firebaseの有無に関わらず）
+    setBooks([...books, localBook]);
   };
 
   // Update book progress
@@ -638,6 +689,24 @@ export default function TsundokuTama() {
           <span className="text-xs">追加</span>
           </Button>
 
+
+          <AddBookDialog
+            isOpen={isAddDialogOpen}
+            onOpenChange={(open) => {
+              setIsAddDialogOpen(open);
+              if (!open) {
+                setScannedBookInfo(null);
+              }
+            }}
+            onAddBook={addBook}
+            onOpenScanner={() => {
+              setIsAddDialogOpen(false); // ダイアログを閉じる
+              setIsScannerOpen(true);
+            }}
+            scannedBookInfo={scannedBookInfo}
+          />
+
+
           <Button
             variant={currentView === "library" ? "default" : "ghost"}
             size="sm"
@@ -652,10 +721,18 @@ export default function TsundokuTama() {
 
       {/* Barcode Scanner (isScannerOpen が true のときにのみ表示) */}
       {isScannerOpen && (
-        <BarcodeScanner
-          onScan={handleBarcodeScan}
-          onClose={() => setIsScannerOpen(false)}
-        />
+        <ClientOnly>
+          <BarcodeScanner
+            onScan={handleBarcodeScan}
+            onClose={() => {
+              setIsScannerOpen(false);
+              // スキャンされた情報がある場合はダイアログを再び開く
+              if (scannedBookInfo) {
+                setIsAddDialogOpen(true);
+              }
+            }}
+          />
+        </ClientOnly>
       )}
     </div>
   );
@@ -959,4 +1036,256 @@ function DetailView({
       </Button>
     </div>
   );
+
 }
+
+// Add Book Dialog Component
+function AddBookDialog({
+  isOpen,
+  onOpenChange,
+  onAddBook,
+  onOpenScanner,
+  scannedBookInfo,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAddBook: (
+    title: string,
+    genre: string,
+    totalPages: number,
+    coverImage: string
+  ) => void;
+  onOpenScanner: () => void;
+  scannedBookInfo: {
+    title: string;
+    author: string;
+    publisher: string;
+    coverImage: string;
+    isbn: string;
+  } | null;
+}) {
+  const [title, setTitle] = useState("");
+  const [genre, setGenre] = useState("study");
+  const [totalPages, setTotalPages] = useState("300");
+  const [coverImage, setCoverImage] = useState("");
+  const [reason, setReason] = useState("");
+
+  // スキャンされた情報をフォームに自動入力
+  useEffect(() => {
+    if (scannedBookInfo) {
+      setTitle(scannedBookInfo.title);
+      setCoverImage(scannedBookInfo.coverImage);
+      // ページ数とジャンルは手動選択のまま
+    }
+  }, [scannedBookInfo]);
+
+  // フォームリセット関数
+  const resetForm = () => {
+    setTitle("");
+    setGenre("study");
+    setTotalPages("300");
+    setCoverImage("");
+    setReason("");
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title || !totalPages) return;
+
+    const imageUrl =
+      coverImage ||
+      `/placeholder.svg?height=200&width=150&query=${encodeURIComponent(
+        title + " book cover"
+      )}`;
+
+    onAddBook(title, genre, Number.parseInt(totalPages), imageUrl, reason);
+    resetForm();
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          className="flex flex-col items-center gap-1 bg-primary hover:bg-primary/90"
+        >
+          <Plus className="w-5 h-5" />
+          <span className="text-xs">追加</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>新しい本を追加</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Barcode Scanner Button */}
+          <div className="space-y-2">
+            <Label>本の追加方法</Label>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onOpenScanner}
+              className="w-full flex items-center gap-2"
+            >
+              <Camera className="h-4 w-4" />
+              バーコードをスキャン
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              または下記のフォームに手動入力
+            </p>
+          </div>
+
+          {/* スキャンされた情報の表示 */}
+          {scannedBookInfo && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-12 h-16 bg-gray-200 rounded flex-shrink-0">
+                  <img
+                    src={scannedBookInfo.coverImage}
+                    alt={scannedBookInfo.title}
+                    className="w-full h-full object-cover rounded"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = "none";
+                    }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-green-800 truncate">
+                    {scannedBookInfo.title}
+                  </p>
+                  <p className="text-xs text-green-600 truncate">
+                    {scannedBookInfo.author}
+                  </p>
+                  <p className="text-xs text-green-600 truncate">
+                    {scannedBookInfo.publisher}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-green-700">
+                ✓
+                バーコードから情報を取得しました。下記でページ数とジャンルを選択してください。
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="title">本のタイトル</Label>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="例：React完全ガイド"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="genre">ジャンル</Label>
+            <Select value={genre} onValueChange={setGenre}>
+              <SelectTrigger id="genre">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="study">勉強・技術書 💪</SelectItem>
+                <SelectItem value="novel">小説・文学 🌸</SelectItem>
+                <SelectItem value="philosophy">哲学・思想 🧘</SelectItem>
+                <SelectItem value="magazine">雑誌・趣味 😊</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="pages">総ページ数</Label>
+            <div className="space-y-2">
+              <Input
+                id="pages"
+                type="number"
+                value={totalPages}
+                onChange={(e) => setTotalPages(e.target.value)}
+                placeholder="300"
+                required
+              />
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTotalPages("100")}
+                  className="text-xs"
+                >
+                  100ページ
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTotalPages("200")}
+                  className="text-xs"
+                >
+                  200ページ
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTotalPages("300")}
+                  className="text-xs"
+                >
+                  300ページ
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTotalPages("400")}
+                  className="text-xs"
+                >
+                  400ページ
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTotalPages("500")}
+                  className="text-xs"
+                >
+                  500ページ
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="reason">なぜこの本を買ったの？</Label>
+            <Input
+              id="reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="例：読書感想文で書かないといけないから、夏目漱石が好きだから..."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cover">表紙画像URL（任意）</Label>
+            <Input
+              id="cover"
+              value={coverImage}
+              onChange={(e) => setCoverImage(e.target.value)}
+              placeholder="https://..."
+            />
+            <p className="text-xs text-muted-foreground">
+              空欄の場合は自動生成されます
+            </p>
+          </div>
+
+          <Button type="submit" className="w-full">
+            本を追加
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
