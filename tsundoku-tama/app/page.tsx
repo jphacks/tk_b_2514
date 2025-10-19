@@ -1,9 +1,6 @@
 "use client";
-
-import type React from "react";
-
 import { useState, useEffect } from "react";
-import { BookOpen, Plus, Settings, Trash2, Camera } from "lucide-react";
+import { BookOpen, Plus, Settings, Trash2, Camera, House, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,8 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BarcodeScanner } from "@/components/barcode-scanner";
-import { fetchBookInfo, validateISBN, normalizeISBN } from "@/lib/openbd";
 
 // Book type definition
 type Book = {
@@ -112,11 +107,320 @@ const getDialogue = (progress: number, personality: string): string => {
   return messages.middle[Math.floor(Math.random() * messages.middle.length)];
 };
 
+const BarcodeScanner = ({ onScan, onClose }: any) => (
+  <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded-lg shadow-lg">
+      <p>バーコードスキャナー（ダミー）</p>
+      <Input placeholder="ISBNを入力 (例: 97847981)" onChange={(e) => onScan(e.target.value)} />
+      <Button onClick={onClose} className="mt-4">閉じる</Button>
+    </div>
+  </div>
+);
+
+const fetchBookInfo = async (isbn: string) => {
+  console.log(`Searching for book with ISBN: ${isbn}`);
+  // ダミーのデータ
+  if (isbn.startsWith("9784")) {
+    return {
+      title: `スキャンされた本 ${isbn}`,
+      author: "著者名",
+      publisher: "出版社",
+      coverImage: "/react-programming-book-cover.jpg", // ダミー画像
+      isbn: isbn,
+    };
+  }
+  return null;
+};
+
+// AddBookView コンポーネント
+function AddBookView({
+  onAddBook,
+  onOpenScanner,
+  scannedBookInfo,
+  onGoHome,
+}: {
+  onAddBook: (
+    title: string,
+    genre: string,
+    totalPages: number,
+    coverImage: string
+  ) => void;
+  onOpenScanner: () => void;
+  scannedBookInfo: {
+    title: string;
+    author: string;
+    publisher: string;
+    coverImage: string;
+    isbn: string;
+  } | null;
+  onGoHome: () => void;
+}) {
+  const [title, setTitle] = useState(scannedBookInfo?.title || "");
+  const [genre, setGenre] = useState("study");
+  const [totalPages, setTotalPages] = useState("300");
+  const [coverImage, setCoverImage] = useState(scannedBookInfo?.coverImage || "");
+
+  // scannedBookInfoが更新されたらフォームに自動入力
+  useEffect(() => {
+    if (scannedBookInfo) {
+      setTitle(scannedBookInfo.title);
+      setCoverImage(scannedBookInfo.coverImage);
+      // その他の情報も設定可能
+    }
+  }, [scannedBookInfo]);
+
+  const resetForm = () => {
+    setTitle("");
+    setGenre("study");
+    setTotalPages("300");
+    setCoverImage("");
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title || !totalPages) return;
+
+    const imageUrl =
+      coverImage ||
+      `/placeholder.svg?height=200&width=150&query=${encodeURIComponent(
+        title + " book cover"
+      )}`;
+
+    onAddBook(title, genre, Number.parseInt(totalPages), imageUrl);
+    resetForm();
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* ヘッダーとキャンセルボタン */}
+      <div className="flex justify-between items-center pb-2 border-b">
+        <h2 className="text-xl font-bold">新しい本を追加</h2>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onGoHome}
+        >
+          キャンセル
+        </Button>
+      </div>
+
+      <Card className="p-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Barcode Scanner Button */}
+          <div className="space-y-2">
+            <Label>本の追加方法</Label>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onOpenScanner}
+              className="w-full flex items-center gap-2"
+            >
+              <Camera className="h-4 w-4" />
+              バーコードをスキャン
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              または下記のフォームに手動入力
+            </p>
+          </div>
+
+          {/* スキャンされた情報の表示 */}
+          {scannedBookInfo && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-2">
+              <h3 className="font-semibold text-green-800">スキャン情報</h3>
+              <p className="text-sm">
+                <span className="font-medium">タイトル:</span> {scannedBookInfo.title}
+              </p>
+              <p className="text-sm">
+                <span className="font-medium">著者:</span> {scannedBookInfo.author}
+              </p>
+              <p className="text-sm">
+                <span className="font-medium">出版社:</span> {scannedBookInfo.publisher}
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="title">本のタイトル</Label>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="例：React完全ガイド"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="genre">ジャンル</Label>
+            <Select value={genre} onValueChange={setGenre}>
+              <SelectTrigger id="genre">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="study">勉強・技術書 💪</SelectItem>
+                <SelectItem value="novel">小説・文学 🌸</SelectItem>
+                <SelectItem value="philosophy">哲学・思想 🧘</SelectItem>
+                <SelectItem value="magazine">雑誌・趣味 😊</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="pages">総ページ数</Label>
+            <div className="space-y-2">
+              <Input
+                id="pages"
+                type="number"
+                value={totalPages}
+                onChange={(e) => setTotalPages(e.target.value)}
+                placeholder="300"
+                required
+              />
+              <div className="flex gap-2 flex-wrap">
+                <Button type="button" variant="outline" size="sm" onClick={() => setTotalPages("100")} className="text-xs">100ページ</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setTotalPages("200")} className="text-xs">200ページ</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setTotalPages("300")} className="text-xs">300ページ</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setTotalPages("400")} className="text-xs">400ページ</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setTotalPages("500")} className="text-xs">500ページ</Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cover">表紙画像URL（任意）</Label>
+            <Input
+              id="cover"
+              value={coverImage}
+              onChange={(e) => setCoverImage(e.target.value)}
+              placeholder="https://..."
+            />
+            <p className="text-xs text-muted-foreground">
+              空欄の場合は自動生成されます
+            </p>
+          </div>
+
+          <Button type="submit" className="w-full">
+            本を追加
+          </Button>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+// LibraryView コンポーネント
+function LibraryView({
+  books,
+  onSelectBook,
+}: {
+  books: Book[];
+  onSelectBook: (book: Book) => void;
+}) {
+  // ジャンル選択状態を管理
+  const [selectedGenre, setSelectedGenre] = useState<string>("all");
+
+  // 完読本のみ抽出
+  const completedBooks = books.filter((book) => book.currentPage === book.totalPages);
+
+  // ジャンルごとに本をグループ化
+  const booksByGenre = completedBooks.reduce((acc, book) => {
+    if (!acc[book.genre]) acc[book.genre] = [];
+    acc[book.genre].push(book);
+    return acc;
+  }, {} as Record<string, Book[]>);
+
+  // ジャンルの並び順を定義
+  const genreOrder = ["study", "novel", "philosophy", "magazine"];
+  const sortedGenres = [...new Set([...genreOrder, ...Object.keys(booksByGenre)])].filter(
+    (genre) => booksByGenre[genre] && booksByGenre[genre].length > 0
+  );
+
+  // フィルタリング処理
+  const filteredGenres =
+    selectedGenre === "all" ? sortedGenres : sortedGenres.filter((g) => g === selectedGenre);
+
+  // 完読本がない場合
+  if (completedBooks.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="text-6xl mb-4">📖</div>
+        <h2 className="text-xl font-bold mb-2">まだ完読した本はありません</h2>
+        <p className="text-muted-foreground mb-6">
+          読書を頑張って、本棚をいっぱいにしましょう！
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-[#F8F5E6] min-h-screen p-4 space-y-10 overflow-y-auto">
+      <h2 className="text-lg font-bold text-foreground mb-2">完読本棚</h2>
+
+      {/* ジャンル切り替えボタン */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <Button
+          variant={selectedGenre === "all" ? "default" : "outline"}
+          onClick={() => setSelectedGenre("all")}
+          className="text-sm"
+        >
+          全て
+        </Button>
+        {sortedGenres.map((genre) => (
+          <Button
+            key={genre}
+            variant={selectedGenre === genre ? "default" : "outline"}
+            onClick={() => setSelectedGenre(genre)}
+            className="text-sm"
+          >
+            {genre === "study" && "勉強・技術書 💪"}
+            {genre === "novel" && "小説・文学 🌸"}
+            {genre === "philosophy" && "哲学・思想 🧘"}
+            {genre === "magazine" && "雑誌・趣味 😊"}
+          </Button>
+        ))}
+      </div>
+
+      {filteredGenres.map((genre) => (
+        <div key={genre} className="mb-8">
+          <h3 className="text-xl font-bold text-foreground mb-4 capitalize">
+            {genre === "study" && "勉強・技術書"}
+            {genre === "novel" && "小説・文学"}
+            {genre === "philosophy" && "哲学・思想"}
+            {genre === "magazine" && "雑誌・趣味"}
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {booksByGenre[genre]?.map((book) => (
+              <Card
+                key={book.id}
+                className="p-3 cursor-pointer hover:shadow-lg transition-shadow flex flex-col items-center text-center"
+                onClick={() => onSelectBook(book)}
+              >
+                <img
+                  src={book.coverImage || "/placeholder.svg"}
+                  alt={book.title}
+                  className="w-24 h-36 object-cover rounded-md shadow-sm mb-2"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = "/placeholder.svg";
+                  }}
+                />
+                <p className="text-sm font-medium text-foreground truncate w-full">
+                  {book.title}
+                </p>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// TsundokuTama コンポーネントの定義
 export default function TsundokuTama() {
   const [books, setBooks] = useState<Book[]>([]);
-  const [currentView, setCurrentView] = useState<"home" | "detail">("home");
+  const [currentView, setCurrentView] = useState<"home" | "detail" | "add" | "library">("home");
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannedBookInfo, setScannedBookInfo] = useState<{
     title: string;
@@ -217,31 +521,31 @@ export default function TsundokuTama() {
     try {
       const bookInfo = await fetchBookInfo(isbn);
       if (bookInfo) {
-        // ダイアログを開いて、取得した情報をフォームに設定
-        setIsAddDialogOpen(true);
-        // フォームに情報を設定するためのコールバック
         setScannedBookInfo(bookInfo);
+        setCurrentView("add"); // スキャン成功後、Addビューに切り替える
       } else {
         alert("本の情報が見つかりませんでした。手動で入力してください。");
-        setIsAddDialogOpen(true);
+        setScannedBookInfo(null); // 情報が見つからなかった場合はリセット
+        setCurrentView("add"); // 手動入力のためにAddビューに切り替える
       }
     } catch (error) {
       console.error("Error fetching book info:", error);
       alert("本の情報の取得に失敗しました。手動で入力してください。");
-      setIsAddDialogOpen(true);
+      setScannedBookInfo(null); // エラー時もリセット
+      setCurrentView("add"); // 手動入力のためにAddビューに切り替える
     }
   };
 
   return (
     <div className="min-h-screen pb-20">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border px-4 py-4">
+      <header className="sticky top-0 z-10 bg-background/80 border-b bg-white border-border px-4 py-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BookOpen className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold text-foreground">積読タマ</h1>
+            <h1 className="text-xl font-bold text-foreground">りーどみー</h1>
           </div>
-          {currentView === "detail" && (
+          {(currentView === "detail" || currentView === "library") && (
             <Button
               variant="ghost"
               size="sm"
@@ -260,22 +564,52 @@ export default function TsundokuTama() {
       <main className="max-w-2xl mx-auto px-4 py-6">
         {currentView === "home" ? (
           <HomeView
-            books={books}
-            onSelectBook={(book) => {
+            books={books.filter(book => book.currentPage<book.totalPages)}
+            onSelectBook={(book: Book) => {
               setSelectedBook(book);
               setCurrentView("detail");
             }}
             onDeleteBook={deleteBook}
           />
-        ) : (
+        ) : currentView === "detail" ? (
           selectedBook && (
             <DetailView
               book={selectedBook}
               onUpdateProgress={updateProgress}
-              onDelete={() => deleteBook(selectedBook.id)}
+               onDelete={() => { // onDelete のロジックを修正
+                if (selectedBook) {
+                  deleteBook(selectedBook.id);
+                }
+              }}
+              onGoHome={() => {
+                setCurrentView("home");
+                setSelectedBook(null);
+              }}
             />
           )
-        )}
+        ) : currentView === "add" ? (
+          <AddBookView
+            onAddBook={(title, genre, totalPages, coverImage) => {
+              addBook(title, genre, totalPages, coverImage);
+              setCurrentView("home"); // 登録後、ホームに戻る
+              setScannedBookInfo(null); // スキャン情報をリセット
+            }}
+            onOpenScanner={() => setIsScannerOpen(true)}
+            scannedBookInfo={scannedBookInfo}
+            onGoHome={() => {
+              setCurrentView("home");
+              setScannedBookInfo(null);
+            }}
+          />
+         ) : currentView === "library" ? (
+          <LibraryView
+            books={books}
+            onSelectBook={(book: Book) => {
+              setSelectedBook(book);
+              setCurrentView("detail");
+            }}
+          />
+        ) : null}
       </main>
 
       {/* Bottom Navigation */}
@@ -287,35 +621,36 @@ export default function TsundokuTama() {
             onClick={() => setCurrentView("home")}
             className="flex flex-col items-center gap-1"
           >
-            <BookOpen className="w-5 h-5" />
-            <span className="text-xs">本棚</span>
+            <House className="w-5 h-5" />
+            <span className="text-xs">ホーム</span>
+          </Button>
+          <Button
+          variant={currentView === "add" ? "default" : "ghost"}
+          size="sm"
+          // className から bg-primary と hover:bg-primary/90 を削除
+          className="flex flex-col items-center gap-1"
+          onClick={() => {
+          setCurrentView("add");
+          setScannedBookInfo(null);
+          }}
+          >
+          <Plus className="w-5 h-5" />
+          <span className="text-xs">追加</span>
           </Button>
 
-          <AddBookDialog
-            isOpen={isAddDialogOpen}
-            onOpenChange={(open) => {
-              setIsAddDialogOpen(open);
-              if (!open) {
-                setScannedBookInfo(null);
-              }
-            }}
-            onAddBook={addBook}
-            onOpenScanner={() => setIsScannerOpen(true)}
-            scannedBookInfo={scannedBookInfo}
-          />
-
           <Button
-            variant="ghost"
+            variant={currentView === "library" ? "default" : "ghost"}
             size="sm"
             className="flex flex-col items-center gap-1"
+            onClick={() => setCurrentView("library")}
           >
-            <Settings className="w-5 h-5" />
-            <span className="text-xs">設定</span>
+            <Library className="w-5 h-5" />
+            <span className="text-xs">本棚</span>
           </Button>
         </div>
       </nav>
 
-      {/* Barcode Scanner */}
+      {/* Barcode Scanner (isScannerOpen が true のときにのみ表示) */}
       {isScannerOpen && (
         <BarcodeScanner
           onScan={handleBarcodeScan}
@@ -370,22 +705,8 @@ function HomeView({
                     alt={book.title}
                     className="w-20 h-28 object-cover rounded-lg shadow-md"
                     onError={(e) => {
-                      console.log(
-                        "Image load error for:",
-                        book.title,
-                        "URL:",
-                        book.coverImage
-                      );
                       const target = e.target as HTMLImageElement;
-                      target.src = "/placeholder.svg";
-                    }}
-                    onLoad={() => {
-                      console.log(
-                        "Image loaded successfully for:",
-                        book.title,
-                        "URL:",
-                        book.coverImage
-                      );
+                      target.src = "/placeholder.svg"; // Fallback image
                     }}
                   />
                 </div>
@@ -410,9 +731,16 @@ function HomeView({
                       </span>
                       <span>{progress}%</span>
                     </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary transition-all duration-300"
+                    <div className="h-2 bg-muted rounded-full overflow-hidden"> {/* 進捗バーの背景 */}
+                      <div className={`h-full ${
+                          progress < 30
+                            ? "bg-red-500" // 0-29%
+                            : progress < 70
+                            ? "bg-yellow-500" // 30-69%
+                            : progress < 100
+                            ? "bg-blue-500" // 70-99%
+                            : "bg-green-500" // 100%
+                        } transition-all duration-300`}
                         style={{ width: `${progress}%` }}
                       />
                     </div>
@@ -437,10 +765,12 @@ function DetailView({
   book,
   onUpdateProgress,
   onDelete,
+  onGoHome,
 }: {
   book: Book;
   onUpdateProgress: (bookId: string, newPage: number) => void;
   onDelete: () => void;
+  onGoHome: () => void;
 }) {
   const progress = Math.round((book.currentPage / book.totalPages) * 100);
   const [localPage, setLocalPage] = useState(book.currentPage);
@@ -455,6 +785,15 @@ function DetailView({
 
   const handleProgressCommit = (value: number[]) => {
     onUpdateProgress(book.id, value[0]);
+  }
+
+// 📘 新しく追加する関数: 進捗を確定し、ホーム画面に戻る
+  const handleRecordAndGoHome = () => {
+    // 1. 進捗の確定（Sliderの操作に関係なく、現在のローカルなページ数を確定する）
+    onUpdateProgress(book.id, localPage);
+
+    // 2. ホーム画面へ戻る
+    onGoHome();
   };
 
   return (
@@ -467,22 +806,8 @@ function DetailView({
             alt={book.title}
             className="w-40 h-56 object-cover rounded-xl shadow-lg"
             onError={(e) => {
-              console.log(
-                "Image load error for:",
-                book.title,
-                "URL:",
-                book.coverImage
-              );
               const target = e.target as HTMLImageElement;
-              target.src = "/placeholder.svg";
-            }}
-            onLoad={() => {
-              console.log(
-                "Image loaded successfully for:",
-                book.title,
-                "URL:",
-                book.coverImage
-              );
+              target.src = "/placeholder.svg"; // Fallback image
             }}
           />
           <h2 className="text-xl font-bold text-foreground">{book.title}</h2>
@@ -505,14 +830,24 @@ function DetailView({
         </div>
       </Card>
 
+      {/* 記録してホームに戻るボタン (新しいボタン) */}
+      <Button
+        variant="default" // メインのアクションとして強調する
+        className="w-full"
+        onClick={handleRecordAndGoHome} // 👆 新しく定義した関数を呼び出す
+      >
+        <House className="w-4 h-4 mr-2" />
+        進捗を記録
+      </Button>
+  
       {/* Progress Control */}
-      <Card className="p-6 space-y-4">
+      <Card className="px-6 py-2 space-y-4">
         <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <Label className="text-base font-bold">読書進捗</Label>
-            <span className="text-2xl font-bold text-primary">{progress}%</span>
+            <Label className="text-base font-bold text-2xl">読書進捗</Label>
+            <span className="text-2xl font-bold text-primary text-2xl">{progress}%</span>
           </div>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-muted-foreground text-xl">
             {localPage} / {book.totalPages} ページ
           </div>
         </div>
@@ -524,32 +859,90 @@ function DetailView({
           max={book.totalPages}
           step={1}
           className="py-4"
+          // progress={progress} // ここに進捗度を渡す！ -> Sliderには直接このプロップは存在しないため削除
         />
 
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            className="flex-1 bg-transparent"
-            onClick={() => {
-              const newPage = Math.max(0, localPage - 10);
-              setLocalPage(newPage);
-              onUpdateProgress(book.id, newPage);
-            }}
-          >
-            -10ページ
-          </Button>
-          <Button
-            variant="outline"
-            className="flex-1 bg-transparent"
-            onClick={() => {
-              const newPage = Math.min(book.totalPages, localPage + 10);
-              setLocalPage(newPage);
-              onUpdateProgress(book.id, newPage);
-            }}
-          >
-            +10ページ
-          </Button>
-        </div>
+        <div className="flex flex-wrap gap-1 w-full justify-between items-center"> {/* ボタン間の隙間をさらに狭く gap-1 に変更 */}
+          
+          {/* 1. -10P */}
+          <Button
+            variant="outline"
+            // flex-1, 文字サイズは維持し、パディングを最小化 (px-1, py-0.5)
+            className="bg-transparent text-[15px] px-1 py-0.5 w-[32%] min-w-0" 
+            onClick={() => {
+              const newPage = Math.max(0, localPage - 10);
+              setLocalPage(newPage);
+              onUpdateProgress(book.id, newPage);
+            }}
+          >
+            -10P
+          </Button>
+
+          {/* 2. -5P */}
+          <Button
+            variant="outline"
+            className="bg-transparent text-[15px] px-1 py-0.5 w-[32%] min-w-0"
+            onClick={() => {
+              const newPage = Math.max(0, localPage - 5);
+              setLocalPage(newPage);
+              onUpdateProgress(book.id, newPage);
+            }}
+          >
+            -5P
+          </Button>
+          
+          {/* 3. -2P */}
+          <Button
+            variant="outline"
+            className="bg-transparent text-[15px] px-1 py-0.5 w-[32%] min-w-0"
+            onClick={() => {
+              const newPage = Math.max(0, localPage - 2);
+              setLocalPage(newPage);
+              onUpdateProgress(book.id, newPage);
+            }}
+          >
+            -2P
+          </Button>
+
+          {/* 4. +2P */}
+          <Button
+            variant="outline"
+            className="bg-transparent text-[15px] px-1 py-0.5 w-[32%] min-w-0"
+            onClick={() => {
+              const newPage = Math.min(book.totalPages, localPage + 2);
+              setLocalPage(newPage);
+              onUpdateProgress(book.id, newPage);
+            }}
+          >
+            +2P
+          </Button>
+          
+          {/* 5. +5P */}
+          <Button
+            variant="outline"
+            className="bg-transparent text-[15px] px-1 py-0.5 w-[32%] min-w-0"
+            onClick={() => {
+              const newPage = Math.min(book.totalPages, localPage + 5);
+              setLocalPage(newPage);
+              onUpdateProgress(book.id, newPage);
+            }}
+          >
+            +5P
+          </Button>
+
+          {/* 6. +10P */}
+          <Button
+            variant="outline"
+            className="bg-transparent text-[15px] px-1 py-0.5 w-[32%] min-w-0"
+            onClick={() => {
+              const newPage = Math.min(book.totalPages, localPage + 10);
+              setLocalPage(newPage);
+              onUpdateProgress(book.id, newPage);
+            }}
+          >
+            +10P
+          </Button>
+        </div>
 
         {progress === 100 && (
           <div className="bg-primary/10 rounded-xl p-4 text-center space-y-2">
@@ -565,243 +958,5 @@ function DetailView({
         この本を削除
       </Button>
     </div>
-  );
-}
-
-// Add Book Dialog Component
-function AddBookDialog({
-  isOpen,
-  onOpenChange,
-  onAddBook,
-  onOpenScanner,
-  scannedBookInfo,
-}: {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  onAddBook: (
-    title: string,
-    genre: string,
-    totalPages: number,
-    coverImage: string
-  ) => void;
-  onOpenScanner: () => void;
-  scannedBookInfo: {
-    title: string;
-    author: string;
-    publisher: string;
-    coverImage: string;
-    isbn: string;
-  } | null;
-}) {
-  const [title, setTitle] = useState("");
-  const [genre, setGenre] = useState("study");
-  const [totalPages, setTotalPages] = useState("300");
-  const [coverImage, setCoverImage] = useState("");
-
-  // スキャンされた情報をフォームに自動入力
-  useEffect(() => {
-    if (scannedBookInfo) {
-      setTitle(scannedBookInfo.title);
-      setCoverImage(scannedBookInfo.coverImage);
-      // ページ数とジャンルは手動選択のまま
-    }
-  }, [scannedBookInfo]);
-
-  // フォームリセット関数
-  const resetForm = () => {
-    setTitle("");
-    setGenre("study");
-    setTotalPages("300");
-    setCoverImage("");
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title || !totalPages) return;
-
-    const imageUrl =
-      coverImage ||
-      `/placeholder.svg?height=200&width=150&query=${encodeURIComponent(
-        title + " book cover"
-      )}`;
-
-    onAddBook(title, genre, Number.parseInt(totalPages), imageUrl);
-    resetForm();
-    onOpenChange(false);
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button
-          size="sm"
-          className="flex flex-col items-center gap-1 bg-primary hover:bg-primary/90"
-        >
-          <Plus className="w-5 h-5" />
-          <span className="text-xs">追加</span>
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>新しい本を追加</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Barcode Scanner Button */}
-          <div className="space-y-2">
-            <Label>本の追加方法</Label>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onOpenScanner}
-              className="w-full flex items-center gap-2"
-            >
-              <Camera className="h-4 w-4" />
-              バーコードをスキャン
-            </Button>
-            <p className="text-xs text-muted-foreground text-center">
-              または下記のフォームに手動入力
-            </p>
-          </div>
-
-          {/* スキャンされた情報の表示 */}
-          {scannedBookInfo && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="w-12 h-16 bg-gray-200 rounded flex-shrink-0">
-                  <img
-                    src={scannedBookInfo.coverImage}
-                    alt={scannedBookInfo.title}
-                    className="w-full h-full object-cover rounded"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = "none";
-                    }}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-green-800 truncate">
-                    {scannedBookInfo.title}
-                  </p>
-                  <p className="text-xs text-green-600 truncate">
-                    {scannedBookInfo.author}
-                  </p>
-                  <p className="text-xs text-green-600 truncate">
-                    {scannedBookInfo.publisher}
-                  </p>
-                </div>
-              </div>
-              <p className="text-xs text-green-700">
-                ✓
-                バーコードから情報を取得しました。下記でページ数とジャンルを選択してください。
-              </p>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="title">本のタイトル</Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="例：React完全ガイド"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="genre">ジャンル</Label>
-            <Select value={genre} onValueChange={setGenre}>
-              <SelectTrigger id="genre">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="study">勉強・技術書 💪</SelectItem>
-                <SelectItem value="novel">小説・文学 🌸</SelectItem>
-                <SelectItem value="philosophy">哲学・思想 🧘</SelectItem>
-                <SelectItem value="magazine">雑誌・趣味 😊</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="pages">総ページ数</Label>
-            <div className="space-y-2">
-              <Input
-                id="pages"
-                type="number"
-                value={totalPages}
-                onChange={(e) => setTotalPages(e.target.value)}
-                placeholder="300"
-                required
-              />
-              <div className="flex gap-2 flex-wrap">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setTotalPages("100")}
-                  className="text-xs"
-                >
-                  100ページ
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setTotalPages("200")}
-                  className="text-xs"
-                >
-                  200ページ
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setTotalPages("300")}
-                  className="text-xs"
-                >
-                  300ページ
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setTotalPages("400")}
-                  className="text-xs"
-                >
-                  400ページ
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setTotalPages("500")}
-                  className="text-xs"
-                >
-                  500ページ
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="cover">表紙画像URL（任意）</Label>
-            <Input
-              id="cover"
-              value={coverImage}
-              onChange={(e) => setCoverImage(e.target.value)}
-              placeholder="https://..."
-            />
-            <p className="text-xs text-muted-foreground">
-              空欄の場合は自動生成されます
-            </p>
-          </div>
-
-          <Button type="submit" className="w-full">
-            本を追加
-          </Button>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
