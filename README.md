@@ -1,6 +1,6 @@
 # りーどみー
 
-[![Logo](tsundoku-tama/public/read_me_logo.png)
+[![Logo](tsundoku-tama/public/read_me_header.png)
 
 # **製品概要**
 
