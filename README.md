@@ -1,6 +1,6 @@
 # りーどみー
 
-[![Logo](@/public/read_me_header.png)
+[![Logo](public/read_me_header.png)
 
 # **製品概要**
 
