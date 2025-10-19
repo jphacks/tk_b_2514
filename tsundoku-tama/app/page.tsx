@@ -655,6 +655,7 @@ function AddBookDialog({
   const [genre, setGenre] = useState("study");
   const [totalPages, setTotalPages] = useState("300");
   const [coverImage, setCoverImage] = useState("");
+  const [reason, setReason] = useState("");
 
   // スキャンされた情報をフォームに自動入力
   useEffect(() => {
@@ -671,6 +672,7 @@ function AddBookDialog({
     setGenre("study");
     setTotalPages("300");
     setCoverImage("");
+    setReason("");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -683,7 +685,7 @@ function AddBookDialog({
         title + " book cover"
       )}`;
 
-    onAddBook(title, genre, Number.parseInt(totalPages), imageUrl);
+    onAddBook(title, genre, Number.parseInt(totalPages), imageUrl, reason);
     resetForm();
     onOpenChange(false);
   };
@@ -840,6 +842,16 @@ function AddBookDialog({
                 </Button>
               </div>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="reason">なぜこの本を買ったの？</Label>
+            <Input
+              id="reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="例：読書感想文で書かないといけないから、夏目漱石が好きだから..."
+            />
           </div>
 
           <div className="space-y-2">
