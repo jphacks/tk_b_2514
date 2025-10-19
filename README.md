@@ -1,6 +1,6 @@
-# サンプル（プロダクト名）
+# りーどみー
 
-[![IMAGE ALT TEXT HERE](https://jphacks.com/wp-content/uploads/2025/05/JPHACKS2025_ogp.jpg)](https://www.youtube.com/watch?v=lA9EluZugD8)
+[![Logo](tsundoku-tama/public/read_me_logo.png)
 
 ## 製品概要
 
